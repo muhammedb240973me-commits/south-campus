@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique // e.g., "admin", "kallayi_div"
+  password     String   // Hashed password
+  role         Role     @default(DIVISION)
+  divisionName String?  // Null for district admins, specific name for divisions
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Student {
+  id               String         @id @default(uuid())
+  name             String
+  mobile           String         @unique
+  type             StudentType    // Friend or Member
+  campus           String
+  division         String
+  
+  // Action Tracking Fields
+  isCalled         Boolean        @default(false)
+  isRegistered     Boolean        @default(false)
+  profsummitStatus SummitStatus   @default(PENDING)
+  
+  // To track who made the call/update (optional but good for analytics)
+  updatedBy        String?        
+  
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+enum Role {
+  DISTRICT
+  DIVISION
+}
+
+enum StudentType {
+  FRIEND
+  MEMBER
+}
+
+enum SummitStatus {
+  PENDING
+  FROM_CAMPUS
+  FROM_NATIVE
+}
