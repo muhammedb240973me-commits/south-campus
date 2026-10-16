@@ -1,6 +1,8 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import MembershipTable from "@/components/MembershipTable";
 
+export const instant = false;
+
 export default function SyndicateMembershipPage() {
   return (
     <DashboardLayout>

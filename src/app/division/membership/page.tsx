@@ -2,6 +2,8 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import MembershipTable from "@/components/MembershipTable";
 
+export const instant = false;
+
 export default function DivisionMembershipPage() {
   return (
     <DashboardLayout>

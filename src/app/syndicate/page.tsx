@@ -7,6 +7,8 @@ import { connection } from "next/server"; // <-- New import
 import prisma from "@/lib/prisma";
 import { authOptions } from "../api/auth/[...nextauth]/route";
 
+export const instant = false;
+
 export default async function SyndicateDashboard() {
   // Explicitly tell Next.js to render this dynamically at request time
   await connection();
