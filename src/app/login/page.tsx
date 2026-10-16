@@ -6,8 +6,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { User, Lock, Loader2 } from "lucide-react";
 
-export const instant = false;
-
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
