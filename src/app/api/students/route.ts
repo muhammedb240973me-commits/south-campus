@@ -1,10 +1,8 @@
 // src/app/api/students/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { PrismaClient } from "@prisma/client";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-const prisma = new PrismaClient();
+import prisma from "@/lib/prisma";
+import { authOptions } from "../auth/[...nextauth]/route";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -17,13 +15,14 @@ export async function GET(req: Request) {
   const isCalled = searchParams.get("isCalled");
   const profsummitStatus = searchParams.get("profsummitStatus");
   
-  // District can filter by division; Division users are locked to their own division
+  // NEW: Check if this is an export request
+  const isExport = searchParams.get("export") === "true";
+  
   let division = searchParams.get("division");
   if (session.user.role === "DIVISION") {
     division = session.user.divisionName;
   }
 
-  // Build the Prisma query filters
   const where: any = {};
   if (division) where.division = division;
   if (campus) where.campus = { contains: campus, mode: "insensitive" };
@@ -35,8 +34,8 @@ export async function GET(req: Request) {
     const [students, total] = await Promise.all([
       prisma.student.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
+        // If it's an export, skip pagination and fetch everything matching the filter
+        ...(isExport ? {} : { skip: (page - 1) * limit, take: limit }),
         orderBy: { name: "asc" },
       }),
       prisma.student.count({ where }),

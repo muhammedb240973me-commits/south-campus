@@ -3,24 +3,17 @@
 
 import { useState, useEffect } from "react";
 import { 
-  Phone, 
-  Copy, 
-  Check, 
-  ChevronLeft, 
-  ChevronRight, 
-  Download, 
-  School, 
-  CheckSquare, 
-  Square,
-  Smartphone,
-  ExternalLink
+  Phone, Copy, Check, ChevronLeft, ChevronRight, 
+  Download, School, CheckSquare, Square, Smartphone, Loader2
 } from "lucide-react";
 
 export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION" }) {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalMembers, setTotalMembers] = useState(0);
 
   // Filters
   const [division, setDivision] = useState("");
@@ -43,6 +36,7 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
     const data = await res.json();
     setStudents(data.data || []);
     setTotalPages(data.meta?.totalPages || 1);
+    setTotalMembers(data.meta?.total || 0);
     setLoading(false);
   };
 
@@ -51,7 +45,6 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
   }, [page, division, campus, isCalled, status]);
 
   const updateStudent = async (id: string, updates: any) => {
-    // Optimistic UI update
     setStudents(students.map(s => s.id === id ? { ...s, ...updates } : s));
     await fetch("/api/students", {
       method: "PATCH",
@@ -65,20 +58,39 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
     alert(`Copied: ${mobile}`);
   };
 
-  const exportToExcel = () => {
-    // Basic CSV export
-    const headers = ["Name,Mobile,Campus,Division,Type,Called,Registered,Status"];
-    const rows = students.map(s => 
-      `"${s.name}","${s.mobile}","${s.campus}","${s.division}","${s.type}",${s.isCalled},${s.isRegistered},${s.profsummitStatus}`
-    );
-    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "students.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const exportToExcel = async () => {
+    setExporting(true);
+    try {
+      // Fetch ALL filtered data from the backend by passing export=true
+      const query = new URLSearchParams({
+        export: "true",
+        ...(division && { division }),
+        ...(campus && { campus }),
+        ...(isCalled && { isCalled }),
+        ...(status && { profsummitStatus: status }),
+      });
+
+      const res = await fetch(`/api/students?${query}`);
+      const data = await res.json();
+      const allStudents = data.data || [];
+
+      // Generate CSV
+      const headers = ["Sl No,Name,Mobile,Campus,Division,Type,Called,Registered,Status"];
+      const rows = allStudents.map((s: any, index: number) => 
+        `${index + 1},"${s.name}","${s.mobile}","${s.campus}","${s.division}","${s.type}",${s.isCalled},${s.isRegistered},${s.profsummitStatus}`
+      );
+      const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `SSF_Membership_Export.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      alert("Failed to export data");
+    }
+    setExporting(false);
   };
 
   return (
@@ -124,9 +136,11 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
         </div>
         <button 
           onClick={exportToExcel} 
-          className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
+          disabled={exporting}
+          className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow disabled:opacity-75 disabled:cursor-wait"
         >
-          <Download size={16} /> Export View
+          {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+          {exporting ? "Exporting..." : "Export View"}
         </button>
       </div>
 
@@ -134,11 +148,12 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
         <div className="text-center py-20 text-gray-500 font-medium animate-pulse">Loading datasets...</div>
       ) : (
         <>
-          {/* Desktop Table View (Hidden on mobile) */}
+          {/* Desktop Table View */}
           <div className="hidden md:block overflow-x-auto bg-white rounded-2xl shadow-sm border border-violet-100">
             <table className="w-full text-left border-collapse">
               <thead className="bg-blue-50/50 text-blue-900 border-b border-violet-100">
                 <tr>
+                  <th className="p-4 font-semibold text-sm w-12 text-center">#</th>
                   <th className="p-4 font-semibold text-sm">Name & Mobile</th>
                   <th className="p-4 font-semibold text-sm">Campus & Div</th>
                   <th className="p-4 font-semibold text-sm">Actions</th>
@@ -146,8 +161,12 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {students.map((student) => (
+                {students.map((student, index) => (
                   <tr key={student.id} className="hover:bg-violet-50/20 transition-colors">
+                    {/* Serial Number Column */}
+                    <td className="p-4 text-center font-bold text-violet-400 text-sm">
+                      {(page - 1) * 50 + index + 1}
+                    </td>
                     <td className="p-4">
                       <div className="font-bold text-blue-950">{student.name}</div>
                       <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-0.5">
@@ -204,17 +223,20 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
             </table>
           </div>
 
-          {/* Mobile Card View (Optimized for handheld interfaces) */}
+          {/* Mobile Card View */}
           <div className="md:hidden space-y-4">
-            {students.map((student) => (
+            {students.map((student, index) => (
               <div 
                 key={student.id} 
                 className="bg-white p-5 rounded-2xl shadow-sm border border-violet-50 space-y-4 hover:border-violet-100 transition-colors"
               >
-                {/* Header: Name and Label badge */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="font-extrabold text-lg text-blue-950 leading-snug">{student.name}</h3>
+                    {/* Serial Number injected right before the name */}
+                    <h3 className="font-extrabold text-lg text-blue-950 leading-snug">
+                      <span className="text-violet-500 mr-2">#{(page - 1) * 50 + index + 1}</span>
+                      {student.name}
+                    </h3>
                     <span className="inline-block text-[10px] font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded mt-1.5 uppercase tracking-wide">
                       {student.division}
                     </span>
@@ -224,105 +246,70 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
                   </span>
                 </div>
                 
-                {/* Visual Metadata Fields */}
                 <div className="space-y-2.5">
-                  {/* Phone Row */}
                   <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600 shrink-0">
-                      <Smartphone size={15} />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-gray-700">{student.mobile}</span>
-                    </div>
+                    <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600 shrink-0"><Smartphone size={15} /></div>
+                    <span className="text-sm font-semibold text-gray-700">{student.mobile}</span>
                   </div>
-
-                  {/* Campus Row */}
                   <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-violet-50 rounded-lg text-violet-600 shrink-0">
-                      <School size={15} />
-                    </div>
+                    <div className="p-1.5 bg-violet-50 rounded-lg text-violet-600 shrink-0"><School size={15} /></div>
                     <span className="text-sm font-medium text-gray-600 leading-tight">{student.campus}</span>
                   </div>
                 </div>
                 
-                {/* Call-to-actions row */}
                 <div className="flex gap-2 pt-3 border-t border-gray-100">
-                  <a 
-                    href={`tel:${student.mobile}`} 
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 text-white font-bold rounded-xl shadow-sm text-sm transition-all active:scale-95"
-                  >
-                    <Phone size={15} /> Call
-                  </a>
-                  <button 
-                    onClick={() => copyNumber(student.mobile)} 
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 text-gray-700 font-bold rounded-xl text-sm transition-all hover:bg-slate-200 active:scale-95"
-                  >
-                    <Copy size={15} /> Copy
-                  </button>
-                  <button 
-                    onClick={() => updateStudent(student.id, { isCalled: !student.isCalled })} 
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 border ${
-                      student.isCalled 
-                        ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
-                        : 'bg-slate-50 border-transparent text-gray-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Check size={15} /> {student.isCalled ? "Called" : "Call"}
-                  </button>
+                  <a href={`tel:${student.mobile}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gradient-to-r from-blue-700 to-blue-600 text-white font-bold rounded-xl shadow-sm text-sm active:scale-95"><Phone size={15} /> Call</a>
+                  <button onClick={() => copyNumber(student.mobile)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 text-gray-700 font-bold rounded-xl text-sm hover:bg-slate-200 active:scale-95"><Copy size={15} /> Copy</button>
+                  <button onClick={() => updateStudent(student.id, { isCalled: !student.isCalled })} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-95 border ${student.isCalled ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-slate-50 border-transparent text-gray-600 hover:bg-slate-100'}`}><Check size={15} /> {student.isCalled ? "Called" : "Call"}</button>
                 </div>
 
-                {/* Sub-actions (Register and Summit Mode) */}
                 <div className="flex flex-col gap-2 pt-2">
-                  <button 
-                    onClick={() => updateStudent(student.id, { isRegistered: !student.isRegistered })}
-                    className={`flex items-center gap-2.5 text-sm font-bold p-3 rounded-xl border transition-all ${
-                      student.isRegistered 
-                        ? 'bg-emerald-50/50 border-emerald-100 text-emerald-800' 
-                        : 'bg-slate-50 border-transparent text-gray-600'
-                    }`}
-                  >
-                    {student.isRegistered ? <CheckSquare size={18} className="text-emerald-600" /> : <Square size={18} className="text-gray-400" />}
-                    Registered for Profsummit
-                  </button>
-                  
+                  <button onClick={() => updateStudent(student.id, { isRegistered: !student.isRegistered })} className={`flex items-center gap-2.5 text-sm font-bold p-3 rounded-xl border transition-all ${student.isRegistered ? 'bg-emerald-50/50 border-emerald-100 text-emerald-800' : 'bg-slate-50 border-transparent text-gray-600'}`}>{student.isRegistered ? <CheckSquare size={18} className="text-emerald-600" /> : <Square size={18} className="text-gray-400" />} Registered for Profsummit</button>
                   <div className="relative">
-                    <select 
-                      value={student.profsummitStatus} 
-                      onChange={(e) => updateStudent(student.id, { profsummitStatus: e.target.value })} 
-                      className="w-full p-3 border border-violet-100 rounded-xl text-sm font-semibold text-gray-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
-                    >
+                    <select value={student.profsummitStatus} onChange={(e) => updateStudent(student.id, { profsummitStatus: e.target.value })} className="w-full p-3 border border-violet-100 rounded-xl text-sm font-semibold text-gray-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none">
                       <option value="PENDING">Status: Pending</option>
                       <option value="FROM_CAMPUS">Attending: From Campus</option>
                       <option value="FROM_NATIVE">Attending: From Native</option>
                     </select>
-                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400 text-[10px]">
-                      ▼
-                    </div>
+                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400 text-[10px]">▼</div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Pagination Controls */}
-          <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-violet-50">
-            <button 
-              onClick={() => setPage(p => Math.max(1, p - 1))} 
-              disabled={page === 1} 
-              className="px-4 py-2 border border-violet-100 bg-white rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5 text-xs md:text-sm font-semibold text-gray-700 transition"
-            >
-              <ChevronLeft size={16} /> Prev
-            </button>
-            <span className="text-xs md:text-sm font-bold text-gray-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-violet-100">
-              Page {page} of {totalPages}
-            </span>
-            <button 
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
-              disabled={page === totalPages} 
-              className="px-4 py-2 border border-violet-100 bg-white rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5 text-xs md:text-sm font-semibold text-gray-700 transition"
-            >
-              Next <ChevronRight size={16} />
-            </button>
+          {/* Upgraded Pagination Controls */}
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-violet-50">
+            {/* Total Members Badge */}
+            <div className="text-sm font-bold text-blue-950 w-full md:w-auto text-center md:text-left">
+              Total <span className="text-violet-600 px-1">{totalMembers}</span> Filtered Members
+            </div>
+
+            {/* Showing X to Y of Z */}
+            <div className="text-xs md:text-sm font-semibold text-gray-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-violet-100">
+              Showing {totalMembers === 0 ? 0 : (page - 1) * 50 + 1} to {Math.min(page * 50, totalMembers)} of {totalMembers}
+            </div>
+
+            {/* Nav Buttons */}
+            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))} 
+                disabled={page === 1} 
+                className="px-4 py-2 border border-violet-100 bg-white rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5 text-xs md:text-sm font-semibold text-gray-700 transition"
+              >
+                <ChevronLeft size={16} /> Prev
+              </button>
+              <span className="text-xs md:text-sm font-bold text-gray-600">
+                Page {page} of {totalPages}
+              </span>
+              <button 
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                disabled={page === totalPages} 
+                className="px-4 py-2 border border-violet-100 bg-white rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5 text-xs md:text-sm font-semibold text-gray-700 transition"
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         </>
       )}
