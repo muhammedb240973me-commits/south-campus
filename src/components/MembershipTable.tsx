@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { 
   Phone, Copy, Check, ChevronLeft, ChevronRight, 
-  Download, School, CheckSquare, Square, Smartphone, Loader2
+  Download, School, CheckSquare, Square, Smartphone, Loader2, Search
 } from "lucide-react";
 
 export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION" }) {
@@ -15,34 +15,62 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
   const [totalPages, setTotalPages] = useState(1);
   const [totalMembers, setTotalMembers] = useState(0);
 
+  // Global Search State
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Dropdown Options State
+  const [options, setOptions] = useState({ divisions: [], campuses: [] });
+
   // Filters
   const [division, setDivision] = useState("");
   const [campus, setCampus] = useState("");
   const [isCalled, setIsCalled] = useState("");
   const [status, setStatus] = useState("");
 
-  const fetchStudents = async () => {
-    setLoading(true);
-    const query = new URLSearchParams({
-      page: page.toString(),
-      limit: "50",
-      ...(division && { division }),
-      ...(campus && { campus }),
-      ...(isCalled && { isCalled }),
-      ...(status && { profsummitStatus: status }),
-    });
-
-    const res = await fetch(`/api/students?${query}`);
-    const data = await res.json();
-    setStudents(data.data || []);
-    setTotalPages(data.meta?.totalPages || 1);
-    setTotalMembers(data.meta?.total || 0);
-    setLoading(false);
-  };
-
+  // Fetch dropdown options on mount
   useEffect(() => {
+    const fetchOptions = async () => {
+      const res = await fetch("/api/students/options");
+      const data = await res.json();
+      if (data.campuses) setOptions(data);
+    };
+    fetchOptions();
+  }, []);
+
+  // Debounce the search input so it doesn't spam the API on every keystroke
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Go back to page 1 on a new search
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  // Fetch the actual table data
+  useEffect(() => {
+    const fetchStudents = async () => {
+      setLoading(true);
+      const query = new URLSearchParams({
+        page: page.toString(),
+        limit: "50",
+        ...(division && { division }),
+        ...(campus && { campus }),
+        ...(isCalled && { isCalled }),
+        ...(status && { profsummitStatus: status }),
+        ...(debouncedSearch && { search: debouncedSearch }),
+      });
+
+      const res = await fetch(`/api/students?${query}`);
+      const data = await res.json();
+      setStudents(data.data || []);
+      setTotalPages(data.meta?.totalPages || 1);
+      setTotalMembers(data.meta?.total || 0);
+      setLoading(false);
+    };
+
     fetchStudents();
-  }, [page, division, campus, isCalled, status]);
+  }, [page, division, campus, isCalled, status, debouncedSearch]);
 
   const updateStudent = async (id: string, updates: any) => {
     setStudents(students.map(s => s.id === id ? { ...s, ...updates } : s));
@@ -61,20 +89,19 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
   const exportToExcel = async () => {
     setExporting(true);
     try {
-      // Fetch ALL filtered data from the backend by passing export=true
       const query = new URLSearchParams({
         export: "true",
         ...(division && { division }),
         ...(campus && { campus }),
         ...(isCalled && { isCalled }),
         ...(status && { profsummitStatus: status }),
+        ...(debouncedSearch && { search: debouncedSearch }),
       });
 
       const res = await fetch(`/api/students?${query}`);
       const data = await res.json();
       const allStudents = data.data || [];
 
-      // Generate CSV
       const headers = ["Sl No,Name,Mobile,Campus,Division,Type,Called,Registered,Status"];
       const rows = allStudents.map((s: any, index: number) => 
         `${index + 1},"${s.name}","${s.mobile}","${s.campus}","${s.division}","${s.type}",${s.isCalled},${s.isRegistered},${s.profsummitStatus}`
@@ -93,40 +120,81 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
     setExporting(false);
   };
 
+  // Dynamically filter available campuses based on the selected division
+  const filteredCampuses = options.campuses
+    .filter((c: any) => division ? c.division === division : true)
+    .map((c: any) => c.campus)
+    .filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+
   return (
     <div className="space-y-6">
-      {/* Top Bar: Filters and Export */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-violet-50 flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex flex-wrap gap-3">
-          {role === "DISTRICT" && (
+      
+      {/* Top Header Controls */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-violet-50 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+        
+        {/* Mobile Top / PC Right: Search Bar & Export Button */}
+        <div className="flex flex-row gap-3 w-full md:w-auto order-1 md:order-2 justify-between md:justify-end">
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
               type="text" 
-              placeholder="Filter by Division" 
-              value={division} 
-              onChange={(e) => { setDivision(e.target.value); setPage(1); }} 
-              className="px-3 py-2 border border-violet-100 bg-white text-gray-700 placeholder-gray-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+              placeholder="Search by Name/Mobile number/Campus/Division..." 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+              className="w-full pl-9 pr-3 py-2 border border-violet-100 bg-white text-gray-700 placeholder-gray-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow" 
             />
+          </div>
+          <button 
+            onClick={exportToExcel} 
+            disabled={exporting}
+            className="flex shrink-0 items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow disabled:opacity-75 disabled:cursor-wait"
+          >
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            <span className="hidden sm:inline">{exporting ? "Exporting..." : "Export View"}</span>
+            <span className="sm:hidden">{exporting ? "..." : "Export"}</span>
+          </button>
+        </div>
+
+        {/* Mobile Bottom / PC Left: Dynamic Dropdown Filters */}
+        <div className="flex flex-wrap gap-3 w-full md:w-auto order-2 md:order-1">
+          {role === "DISTRICT" && (
+            <select 
+              value={division} 
+              onChange={(e) => { setDivision(e.target.value); setCampus(""); setPage(1); }} 
+              className="px-3 py-2 border border-violet-100 bg-white text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[150px] truncate"
+            >
+              <option value="">All Divisions</option>
+              {options.divisions.map((div: string) => (
+                <option key={div} value={div}>{div}</option>
+              ))}
+            </select>
           )}
-          <input 
-            type="text" 
-            placeholder="Filter by Campus" 
+          
+          <select 
             value={campus} 
             onChange={(e) => { setCampus(e.target.value); setPage(1); }} 
-            className="px-3 py-2 border border-violet-100 bg-white text-gray-700 placeholder-gray-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-          />
+            className="px-3 py-2 border border-violet-100 bg-white text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[160px] truncate"
+          >
+            <option value="">All Campuses</option>
+            {filteredCampuses.map((camp: string) => (
+              <option key={camp} value={camp}>{camp}</option>
+            ))}
+          </select>
+          
           <select 
             value={isCalled} 
             onChange={(e) => { setIsCalled(e.target.value); setPage(1); }} 
-            className="px-3 py-2 border border-violet-100 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+            className="px-3 py-2 border border-violet-100 bg-white text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Call Status: All</option>
             <option value="true">Called</option>
             <option value="false">Not Called</option>
           </select>
+          
           <select 
             value={status} 
             onChange={(e) => { setStatus(e.target.value); setPage(1); }} 
-            className="px-3 py-2 border border-violet-100 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+            className="px-3 py-2 border border-violet-100 bg-white text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Summit Status: All</option>
             <option value="PENDING">Pending</option>
@@ -134,18 +202,13 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
             <option value="FROM_NATIVE">From Native</option>
           </select>
         </div>
-        <button 
-          onClick={exportToExcel} 
-          disabled={exporting}
-          className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow disabled:opacity-75 disabled:cursor-wait"
-        >
-          {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-          {exporting ? "Exporting..." : "Export View"}
-        </button>
+
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-gray-500 font-medium animate-pulse">Loading datasets...</div>
+        <div className="text-center py-20 text-gray-500 font-medium animate-pulse">Searching datasets...</div>
+      ) : students.length === 0 ? (
+        <div className="text-center py-20 text-gray-500 font-medium bg-white rounded-2xl border border-violet-50">No students found matching your criteria.</div>
       ) : (
         <>
           {/* Desktop Table View */}
@@ -163,7 +226,6 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
               <tbody className="divide-y divide-gray-50">
                 {students.map((student, index) => (
                   <tr key={student.id} className="hover:bg-violet-50/20 transition-colors">
-                    {/* Serial Number Column */}
                     <td className="p-4 text-center font-bold text-violet-400 text-sm">
                       {(page - 1) * 50 + index + 1}
                     </td>
@@ -187,30 +249,15 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
                       <div className="flex gap-2">
                         <a href={`tel:${student.mobile}`} title="Call Now" className="p-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"><Phone size={16} /></a>
                         <button onClick={() => copyNumber(student.mobile)} title="Copy Number" className="p-2 bg-slate-50 text-gray-600 rounded-lg hover:bg-slate-100 transition"><Copy size={16} /></button>
-                        <button 
-                          onClick={() => updateStudent(student.id, { isCalled: !student.isCalled })} 
-                          title="Toggle Called Status"
-                          className={`p-2 rounded-lg transition-all ${student.isCalled ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-50 text-gray-600 border border-transparent hover:bg-slate-100'}`}
-                        >
-                          <Check size={16} />
-                        </button>
+                        <button onClick={() => updateStudent(student.id, { isCalled: !student.isCalled })} title="Toggle Called Status" className={`p-2 rounded-lg transition-all ${student.isCalled ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-50 text-gray-600 border border-transparent hover:bg-slate-100'}`}><Check size={16} /></button>
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="flex flex-col gap-2 max-w-xs">
-                        <button 
-                          onClick={() => updateStudent(student.id, { isRegistered: !student.isRegistered })}
-                          className={`flex items-center gap-2 text-xs font-semibold py-1 px-2.5 rounded-lg border text-left transition-all ${student.isRegistered ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-slate-50 border-transparent text-gray-600 hover:bg-slate-100'}`}
-                        >
-                          {student.isRegistered ? <CheckSquare size={14} className="text-emerald-600" /> : <Square size={14} className="text-gray-400" />}
-                          Registered
+                        <button onClick={() => updateStudent(student.id, { isRegistered: !student.isRegistered })} className={`flex items-center gap-2 text-xs font-semibold py-1 px-2.5 rounded-lg border text-left transition-all ${student.isRegistered ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-slate-50 border-transparent text-gray-600 hover:bg-slate-100'}`}>
+                          {student.isRegistered ? <CheckSquare size={14} className="text-emerald-600" /> : <Square size={14} className="text-gray-400" />} Registered
                         </button>
-                        
-                        <select 
-                          value={student.profsummitStatus} 
-                          onChange={(e) => updateStudent(student.id, { profsummitStatus: e.target.value })} 
-                          className="text-xs border border-violet-100 bg-white rounded-lg p-1.5 text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        >
+                        <select value={student.profsummitStatus} onChange={(e) => updateStudent(student.id, { profsummitStatus: e.target.value })} className="text-xs border border-violet-100 bg-white rounded-lg p-1.5 text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500">
                           <option value="PENDING">Pending</option>
                           <option value="FROM_CAMPUS">From Campus</option>
                           <option value="FROM_NATIVE">From Native</option>
@@ -226,13 +273,9 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
           {/* Mobile Card View */}
           <div className="md:hidden space-y-4">
             {students.map((student, index) => (
-              <div 
-                key={student.id} 
-                className="bg-white p-5 rounded-2xl shadow-sm border border-violet-50 space-y-4 hover:border-violet-100 transition-colors"
-              >
+              <div key={student.id} className="bg-white p-5 rounded-2xl shadow-sm border border-violet-50 space-y-4 hover:border-violet-100 transition-colors">
                 <div className="flex items-start justify-between">
                   <div>
-                    {/* Serial Number injected right before the name */}
                     <h3 className="font-extrabold text-lg text-blue-950 leading-snug">
                       <span className="text-violet-500 mr-2">#{(page - 1) * 50 + index + 1}</span>
                       {student.name}
@@ -280,17 +323,14 @@ export default function MembershipTable({ role }: { role: "DISTRICT" | "DIVISION
 
           {/* Upgraded Pagination Controls */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-violet-50">
-            {/* Total Members Badge */}
             <div className="text-sm font-bold text-blue-950 w-full md:w-auto text-center md:text-left">
               Total <span className="text-violet-600 px-1">{totalMembers}</span> Filtered Members
             </div>
 
-            {/* Showing X to Y of Z */}
             <div className="text-xs md:text-sm font-semibold text-gray-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-violet-100">
               Showing {totalMembers === 0 ? 0 : (page - 1) * 50 + 1} to {Math.min(page * 50, totalMembers)} of {totalMembers}
             </div>
 
-            {/* Nav Buttons */}
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
               <button 
                 onClick={() => setPage(p => Math.max(1, p - 1))} 
