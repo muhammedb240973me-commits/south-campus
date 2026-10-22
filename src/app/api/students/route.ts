@@ -17,6 +17,7 @@ export async function GET(req: Request) {
   const profsummitStatus = searchParams.get("profsummitStatus");
   const search = searchParams.get("search"); 
   const isExport = searchParams.get("export") === "true";
+  const isRegisteredParam = searchParams.get("isRegistered");
   
   let division = searchParams.get("division");
   if (session.user.role === "DIVISION") {
@@ -29,6 +30,7 @@ export async function GET(req: Request) {
   if (isCalled === "true") where.isCalled = true;
   if (isCalled === "false") where.isCalled = false;
   if (profsummitStatus) where.profsummitStatus = profsummitStatus;
+  if (isRegisteredParam === "true") where.isRegistered = true;
 
   // Global Search Logic: Looks across Name, Mobile, Campus, and Division
   if (search) {
@@ -65,7 +67,7 @@ export async function PATCH(req: Request) {
 
   try {
     const body = await req.json();
-    const { id, isCalled, isRegistered, profsummitStatus } = body;
+    const { id, isCalled, isRegistered, profsummitStatus, isMessageSent } = body;
 
     const updatedStudent = await prisma.student.update({
       where: { id },
@@ -73,6 +75,7 @@ export async function PATCH(req: Request) {
         ...(isCalled !== undefined && { isCalled }),
         ...(isRegistered !== undefined && { isRegistered }),
         ...(profsummitStatus !== undefined && { profsummitStatus }),
+        ...(isMessageSent !== undefined && { isMessageSent }),
         updatedBy: session.user.username,
       },
     });

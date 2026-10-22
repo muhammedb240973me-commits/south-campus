@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, LayoutDashboard, Users, LogOut } from "lucide-react";
+import { Menu, X, LayoutDashboard, Users, LogOut, Tent, Ticket, Calendar, MessageSquare } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
@@ -53,6 +53,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors text-sm ${pathname.includes("/membership") ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-violet-50 hover:text-violet-700"}`}
             >
               <Users size={18} /> Membership Data
+            </Link>
+            <Link 
+              href={`${basePath}/profsummit`} 
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors text-sm ${pathname.includes("/profsummit") ? "bg-emerald-50 text-emerald-700 font-semibold" : "text-gray-600 hover:bg-emerald-50 hover:text-emerald-700"}`}
+            >
+              <Tent size={18} /> Profsummit Data
+            </Link>
+            <Link 
+              href={`${basePath}/template`} 
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors text-sm ${pathname.includes("/template") ? "bg-violet-50 text-violet-700 font-semibold" : "text-gray-600 hover:bg-violet-50 hover:text-violet-700"}`}
+            >
+              <MessageSquare size={18} /> Text to Send
             </Link>
           </nav>
           

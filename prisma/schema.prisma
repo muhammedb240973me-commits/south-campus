@@ -30,6 +30,7 @@ model Student {
   isCalled         Boolean        @default(false)
   isRegistered     Boolean        @default(false)
   profsummitStatus SummitStatus   @default(PENDING)
+  isMessageSent    Boolean        @default(false)
   
   // To track who made the call/update (optional but good for analytics)
   updatedBy        String?        
@@ -52,4 +53,24 @@ enum SummitStatus {
   PENDING
   FROM_CAMPUS
   FROM_NATIVE
+}
+
+model MessageTemplate {
+  id        String   @id @default("default")
+  content   String
+  updatedAt DateTime @updatedAt
+}
+
+model ProfsummitStudent {
+  id               String         @id @default(uuid())
+  name             String
+  mobile           String         @unique
+  type             String?
+  campus           String
+  division         String
+  
+  isMessageSent    Boolean        @default(false)
+  
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 }
