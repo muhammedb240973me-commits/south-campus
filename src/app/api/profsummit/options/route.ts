@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({
-      divisions: divisions.map(d => d.division),
+      divisions: divisions.map((d: any) => d.division),
       campuses: campuses
     });
   } catch (error) {
