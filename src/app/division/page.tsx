@@ -1,7 +1,7 @@
 // src/app/division/page.tsx
 import DashboardLayout from "@/components/DashboardLayout";
 import Link from "next/link";
-import { ArrowRight, PhoneCall, CheckCircle, GraduationCap, Users } from "lucide-react";
+import { ArrowRight, PhoneCall, CheckCircle, GraduationCap, Users, MessageCircle } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { connection } from "next/server"; // <-- New import
 import prisma from "@/lib/prisma";
@@ -22,6 +22,18 @@ export default async function DivisionDashboard() {
     prisma.student.count({ where: { division: divisionName, isRegistered: true } }),
     prisma.student.count({ where: { division: divisionName, profsummitStatus: "FROM_CAMPUS" } }),
   ]);
+
+  // Fetch Profsummit Analytics (Division Specific)
+  const totalProfsummit = await prisma.profsummitStudent.count({
+    where: { division: divisionName }
+  });
+  
+  const sentProfsummit = await prisma.profsummitStudent.count({
+    where: { 
+      division: divisionName,
+      isMessageSent: true 
+    }
+  });
 
   const completionPercentage = totalStudents > 0 ? Math.round((calledCount / totalStudents) * 100) : 0;
 
@@ -52,6 +64,19 @@ export default async function DivisionDashboard() {
           <StatCard title="From Campus" value={campusCount} subtitle="Attending from campus" icon={<GraduationCap className="text-amber-500" />} />
         </div>
 
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex items-center justify-between hover:shadow-md transition-shadow">
+        <div>
+          <h3 className="text-gray-500 text-sm font-semibold mb-1 tracking-wide">Profsummit Messages</h3>
+          <div className="text-2xl font-extrabold text-blue-950">
+            {sentProfsummit} <span className="text-sm font-medium text-gray-400">/ {totalProfsummit} Sent</span>
+          </div>
+        </div>
+        <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+          {/* Make sure MessageCircle is imported from lucide-react at the top of the file */}
+          <MessageCircle size={24} />
+        </div>
       </div>
     </DashboardLayout>
   );

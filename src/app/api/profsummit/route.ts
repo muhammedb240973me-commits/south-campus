@@ -6,7 +6,6 @@ import { authOptions } from "../auth/[...nextauth]/route";
 
 // Inside src/app/api/profsummit/route.ts
 
-// Replace the GET function entirely:
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,18 +15,20 @@ export async function GET(req: Request) {
   const limit = parseInt(searchParams.get("limit") || "50");
   const search = searchParams.get("search");
   const campus = searchParams.get("campus");
+  const isMessageSent = searchParams.get("isMessageSent"); // NEW FILTER
   
   let division = searchParams.get("division");
   if (session.user.role === "DIVISION") {
     division = session.user.divisionName;
   }
 
-  const where: any = {};
-  if (division) where.division = division;
-  if (campus) where.campus = campus;
+  // Base conditions (ignoring message status for global analytics)
+  const baseWhere: any = {};
+  if (division) baseWhere.division = division;
+  if (campus) baseWhere.campus = campus;
   
   if (search) {
-    where.OR = [
+    baseWhere.OR = [
       { name: { contains: search, mode: "insensitive" } },
       { mobile: { contains: search, mode: "insensitive" } },
       { campus: { contains: search, mode: "insensitive" } },
@@ -35,20 +36,33 @@ export async function GET(req: Request) {
     ];
   }
 
+  // Active conditions (including the message status filter)
+  const where = { ...baseWhere };
+  if (isMessageSent === "true") where.isMessageSent = true;
+  if (isMessageSent === "false") where.isMessageSent = false;
+
   try {
-    const [students, total] = await Promise.all([
+    const [students, totalFiltered, totalSent, totalBase] = await Promise.all([
       prisma.profsummitStudent.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { name: "asc" },
       }),
-      prisma.profsummitStudent.count({ where }),
+      prisma.profsummitStudent.count({ where }), // Total matching active filters
+      prisma.profsummitStudent.count({ where: { ...baseWhere, isMessageSent: true } }), // Total sent in this view
+      prisma.profsummitStudent.count({ where: baseWhere }) // Total attendees in this view
     ]);
 
     return NextResponse.json({ 
       data: students,
-      meta: { total, page, totalPages: Math.ceil(total / limit) }
+      meta: { 
+        total: totalFiltered, 
+        page, 
+        totalPages: Math.ceil(totalFiltered / limit),
+        totalSent,
+        totalBase
+      }
     });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });

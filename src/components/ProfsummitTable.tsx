@@ -14,6 +14,8 @@ export default function ProfsummitTable({ role }: { role: "DISTRICT" | "DIVISION
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalMembers, setTotalMembers] = useState(0);
+  const [messageStatus, setMessageStatus] = useState("");
+  const [analytics, setAnalytics] = useState({ sent: 0, total: 0 });
 
   // Filters & Search
   const [search, setSearch] = useState("");
@@ -47,6 +49,7 @@ export default function ProfsummitTable({ role }: { role: "DISTRICT" | "DIVISION
         limit: "50",
         ...(division && { division }),
         ...(campus && { campus }),
+        ...(messageStatus && { isMessageSent: messageStatus }), // Add this line
         ...(debouncedSearch && { search: debouncedSearch }),
       });
       
@@ -62,12 +65,18 @@ export default function ProfsummitTable({ role }: { role: "DISTRICT" | "DIVISION
       setTotalPages(studentsData.meta?.totalPages || 1);
       setTotalMembers(studentsData.meta?.total || 0);
       
+      // Add this line to update the analytics banner
+      setAnalytics({ 
+        sent: studentsData.meta?.totalSent || 0, 
+        total: studentsData.meta?.totalBase || 0 
+      });
+      
       if (templateData.content) setTemplateStr(templateData.content);
       
       setLoading(false);
     };
     fetchData();
-  }, [page, division, campus, debouncedSearch]);
+  }, [page, division, campus, messageStatus, debouncedSearch]); // Add messageStatus to dependency array
 
   const updateMessageStatus = async (id: string, isMessageSent: boolean) => {
     setStudents(students.map(s => s.id === id ? { ...s, isMessageSent } : s));
@@ -111,12 +120,25 @@ export default function ProfsummitTable({ role }: { role: "DISTRICT" | "DIVISION
       
       {/* Top Header Controls */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-emerald-50 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="flex flex-wrap gap-3 w-full md:w-auto order-2 md:order-1">
+        
+        {/* Analytics Header */}
+        <div className="flex flex-col order-3 md:order-1 w-full md:w-auto">
+          <div className="text-emerald-800 font-extrabold text-sm md:text-base flex items-center gap-2">
+            <MessageCircle size={18} className="text-emerald-500" />
+            {analytics.sent} of {analytics.total} Messages Sent
+          </div>
+          <div className="text-[10px] text-emerald-600/70 font-bold uppercase tracking-widest mt-0.5">
+            Active Filter: {totalMembers} Attendees
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2 w-full md:w-auto order-2">
           {role === "DISTRICT" && (
             <select 
               value={division} 
               onChange={(e) => { setDivision(e.target.value); setCampus(""); setPage(1); }} 
-              className="px-3 py-2 border border-emerald-100 bg-emerald-50/30 text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[150px] truncate"
+              className="px-3 py-2 border border-emerald-100 bg-emerald-50/30 text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[130px] truncate"
             >
               <option value="">All Divisions</option>
               {options.divisions.map((div: string) => (
@@ -128,16 +150,28 @@ export default function ProfsummitTable({ role }: { role: "DISTRICT" | "DIVISION
           <select 
             value={campus} 
             onChange={(e) => { setCampus(e.target.value); setPage(1); }} 
-            className="px-3 py-2 border border-emerald-100 bg-emerald-50/30 text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[160px] truncate"
+            className="px-3 py-2 border border-emerald-100 bg-emerald-50/30 text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[130px] truncate"
           >
             <option value="">All Campuses</option>
             {filteredCampuses.map((camp: string) => (
               <option key={camp} value={camp}>{camp}</option>
             ))}
           </select>
+
+          {/* NEW MESSAGE STATUS FILTER */}
+          <select 
+            value={messageStatus} 
+            onChange={(e) => { setMessageStatus(e.target.value); setPage(1); }} 
+            className="px-3 py-2 border border-emerald-100 bg-emerald-50/30 text-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[130px]"
+          >
+            <option value="">All Messages</option>
+            <option value="true">Sent Only</option>
+            <option value="false">Pending Only</option>
+          </select>
         </div>
 
-        <div className="relative w-full md:w-64 order-1 md:order-2">
+        {/* Search */}
+        <div className="relative w-full md:w-56 order-1 md:order-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input 
             type="text" 
